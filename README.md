@@ -1,6 +1,6 @@
 # Acts As Votable (aka Acts As Likeable)
 
-[![Build Status](https://travis-ci.org/ryanto/acts_as_votable.png)](https://travis-ci.org/ryanto/acts_as_votable)
+![Build status](https://github.com/ryanto/acts_as_votable/workflows/CI/badge.svg)
 
 Acts As Votable is a Ruby Gem specifically written for Rails/ActiveRecord models.
 The main goals of this gem are:
@@ -15,17 +15,15 @@ The main goals of this gem are:
 
 ### Supported Ruby and Rails versions
 
-* Ruby 1.8.7, 1.9.2, 1.9.3
-* Ruby 2.0.0, 2.1.0
-* Rails 3.0, 3.1, 3.2
-* Rails 4.0, 4.1+
+- Ruby >= 2.5.0
+- Rails >= 5.1
 
 ### Install
 
-Just add the following to your Gemfile.
+Just add the following to your Gemfile to install the latest release.
 
 ```ruby
-gem 'acts_as_votable', '~> 0.10.0'
+gem 'acts_as_votable'
 ```
 
 And follow that up with a ``bundle install``.
@@ -35,8 +33,10 @@ And follow that up with a ``bundle install``.
 Acts As Votable uses a votes table to store all voting information.  To
 generate and run the migration just use.
 
-    rails generate acts_as_votable:migration
-    rake db:migrate
+```bash
+rails generate acts_as_votable:migration
+rails db:migrate
+```
 
 You will get a performance increase by adding in cached columns to your model's
 tables.  You will have to do this manually through your own migrations.  See the
@@ -47,7 +47,7 @@ caching section of this document for more information.
 ### Votable Models
 
 ```ruby
-class Post < ActiveRecord::Base
+class Post < ApplicationRecord
   acts_as_votable
 end
 
@@ -77,7 +77,6 @@ By default all votes are positive, so `@user3` has cast a 'good' vote for `@post
 
 `@user2` and `@user4` on the other had has voted against `@post`.
 
-
 Just about any word works for casting a vote in favor or against post.  Up/Down,
 Like/Dislike, Positive/Negative... the list goes on-and-on.  Boolean flags `true` and
 `false` are also applicable.
@@ -96,10 +95,12 @@ Revisiting the previous example of code.
 
 # tally them up!
 @post.votes_for.size # => 5
+@post.weighted_total => 5
 @post.get_likes.size # => 3
 @post.get_upvotes.size # => 3
 @post.get_dislikes.size # => 2
 @post.get_downvotes.size # => 2
+@post.weighted_score => 1
 ```
 
 Active Record scopes are provided to make life easier.
@@ -109,7 +110,7 @@ Active Record scopes are provided to make life easier.
 @post.votes_for.down
 @user1.votes.up
 @user1.votes.down
-@user1.votes.up.by_type(Post)
+@user1.votes.up.for_type(Post)
 ```
 
 Once scoping is complete, you can also trigger a get for the
@@ -165,6 +166,7 @@ You can add a scope to your vote
 @post.find_votes_for(:vote_scope => 'week').size # => 1
 @post.find_votes_for(:vote_scope => 'month').size # => 1
 ```
+
 ### Adding weights to your votes
 
 You can add weight to your vote. The default value is 1.
@@ -192,15 +194,15 @@ You can add weight to your vote. The default value is 1.
 You can have your voters `acts_as_voter` to provide some reserve functionality.
 
 ```ruby
-class User < ActiveRecord::Base
+class User < ApplicationRecord
   acts_as_voter
 end
 
 @user.likes @article
 
-@article.votes.size # => 1
-@article.likes.size # => 1
-@article.dislikes.size # => 0
+@article.votes_for.size # => 1
+@article.get_likes.size # => 1
+@article.get_dislikes.size # => 0
 ```
 
 To check if a voter has voted on a model, you can use ``voted_for?``.  You can
@@ -215,9 +217,9 @@ check how the voter voted by using ``voted_as_when_voted_for``.
 @user.voted_for? @comment2 # => true
 @user.voted_for? @comment3 # => false
 
-@user.voted_as_when_voted_for @comment1 # => true, he liked it
-@user.voted_as_when_voted_for @comment2 # => false, he didnt like it
-@user.voted_as_when_voted_for @comment3 # => nil, he has yet to vote
+@user.voted_as_when_voted_for @comment1 # => true, user liked it
+@user.voted_as_when_voted_for @comment2 # => false, user didnt like it
+@user.voted_as_when_voted_for @comment3 # => nil, user has yet to vote
 ```
 
 You can also check whether the voter has voted up or down.
@@ -273,8 +275,8 @@ because `@user` has already voted for `@shoe`.
 @user.likes @shoe
 @user.likes @shoe
 
-@shoe.votes # => 1
-@shoe.likes # => 1
+@shoe.votes_for.size # => 1
+@shoe.get_likes.size # => 1
 ```
 
 To check if a vote counted, or registered, use `vote_registered?` on your model
@@ -290,9 +292,9 @@ after voting.  For example:
 @hat.disliked_by @user
 @hat.vote_registered? # => true, because user changed their vote
 
-@hat.votes.size # => 1
-@hat.positives.size # => 0
-@hat.negatives.size # => 1
+@hat.votes_for.size # => 1
+@hat.get_positives.size # => 0
+@hat.get_negatives.size # => 1
 ```
 
 To permit duplicates entries of a same voter, use option duplicate. Also notice that this
@@ -310,39 +312,42 @@ to speed up @post we would use the following migration:
 
 ```ruby
 class AddCachedVotesToPosts < ActiveRecord::Migration
-  def self.up
-    add_column :posts, :cached_votes_total, :integer, :default => 0
-    add_column :posts, :cached_votes_score, :integer, :default => 0
-    add_column :posts, :cached_votes_up, :integer, :default => 0
-    add_column :posts, :cached_votes_down, :integer, :default => 0
-    add_column :posts, :cached_weighted_score, :integer, :default => 0
-    add_column :posts, :cached_weighted_total, :integer, :default => 0
-    add_column :posts, :cached_weighted_average, :float, :default => 0.0
-    add_index  :posts, :cached_votes_total
-    add_index  :posts, :cached_votes_score
-    add_index  :posts, :cached_votes_up
-    add_index  :posts, :cached_votes_down
-    add_index  :posts, :cached_weighted_score
-    add_index  :posts, :cached_weighted_total
-    add_index  :posts, :cached_weighted_average
+  def change
+    change_table :posts do |t|
+      t.integer :cached_votes_total, default: 0
+      t.integer :cached_votes_score, default: 0
+      t.integer :cached_votes_up, default: 0
+      t.integer :cached_votes_down, default: 0
+      t.integer :cached_weighted_score, default: 0
+      t.integer :cached_weighted_total, default: 0
+      t.float :cached_weighted_average, default: 0.0
+    end
 
     # Uncomment this line to force caching of existing votes
     # Post.find_each(&:update_cached_votes)
   end
+end
+```
 
-  def self.down
-    remove_column :posts, :cached_votes_total
-    remove_column :posts, :cached_votes_score
-    remove_column :posts, :cached_votes_up
-    remove_column :posts, :cached_votes_down
-    remove_column :posts, :cached_weighted_score
-    remove_column :posts, :cached_weighted_total
-    remove_column :posts, :cached_weighted_average
+If you have a scope for your vote, let's say `subscribe`, your migration will be slightly different like below:
+
+```ruby
+class AddCachedVotesToPosts < ActiveRecord::Migration
+  def change
+    change_table :posts do |t|
+      t.integer :cached_scoped_subscribe_votes_total, default: 0
+      t.integer :cached_scoped_subscribe_votes_score, default: 0
+      t.integer :cached_scoped_subscribe_votes_up, default: 0
+      t.integer :cached_scoped_subscribe_votes_down, default: 0
+      t.integer :cached_weighted_subscribe_score, default: 0
+      t.integer :cached_weighted_subscribe_total, default: 0
+      t.float :cached_weighted_subscribe_average, default: 0.0
+    end
   end
 end
 ```
 
-`cached_weighted_average` can be helpful for a rating system, e.g.: 
+`cached_weighted_average` can be helpful for a rating system, e.g.:
 
 Order by average rating:
 
@@ -357,48 +362,29 @@ Display average rating:
 <!-- 3.5 / 5 -->
 ```
 
+## Votable model's `updated_at`
+
+You can control whether `updated_at` column of votable model will be touched or
+not by passing `cacheable_strategy` option to `acts_as_votable` method.
+
+By default, `update` strategy is used. Pass `:update_columns` as
+`cacheable_strategy` if you don't want to touch model's `updated_at` column.
+
+```ruby
+class Post < ApplicationRecord
+  acts_as_votable cacheable_strategy: :update_columns
+end
+```
+
 ## Testing
 
 All tests follow the RSpec format and are located in the spec directory.
 They can be run with:
 
-```
+```bash
 rake spec
 ```
 
-## Changes  
-
-### Fixes for votable voter model  
-
-In version 0.8.0, there are bugs for a model that is both votable and voter.  
-Some name-conflicting methods are renamed:
-+ Renamed Votable.votes to votes_for  
-+ Renamed Votable.vote to vote_by,
-+ Removed Votable.vote_by alias (was an alias for :vote_up)
-+ Renamed Votable.unvote_for to unvote_by
-+ Renamed Votable.find_votes to find_votes_for
-+ Renamed Votable.up_votes to get_upvotes 
-  + and its aliases :get_true_votes, :get_ups, :get_upvotes, :get_likes, :get_positives, :get_for_votes
-+ Renamed Votable.down_votes to get_downvotes 
-  + and its aliases :get_false_votes, :get_downs, :get_downvotes, :get_dislikes, :get_negatives
-
-
 ## License
 
-Acts as votable is released under the [MIT
-License](http://www.opensource.org/licenses/MIT).
-
-## TODO
-
-- Pass in a block of options when creating acts_as.  Allow for things
-  like disabling the aliasing
-
-- Smarter language syntax.  Example: `@user.likes` will return all of the votables
-that the user likes, while `@user.likes @model` will cast a vote for @model by
-@user.
-
-
-- The aliased methods are referred to by using the terms 'up/down' and/or
-'true/false'.  Need to come up with guidelines for naming these methods.
-
-- Create more aliases. Specifically for counting votes and finding votes.
+Acts as votable is released under the [MIT License](http://www.opensource.org/licenses/MIT).

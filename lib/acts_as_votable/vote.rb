@@ -1,31 +1,29 @@
-require 'acts_as_votable/helpers/words'
+# frozen_string_literal: true
+
+require "acts_as_votable/helpers/words"
 
 module ActsAsVotable
   class Vote < ::ActiveRecord::Base
-
     include Helpers::Words
 
-    if defined?(ProtectedAttributes) || ::ActiveRecord::VERSION::MAJOR < 4
+    if defined?(ProtectedAttributes)
       attr_accessible :votable_id, :votable_type,
         :voter_id, :voter_type,
         :votable, :voter,
         :vote_flag, :vote_scope
     end
 
-    belongs_to :votable, :polymorphic => true
-    belongs_to :voter, :polymorphic => true
+    belongs_to :votable, polymorphic: true
+    belongs_to :voter, polymorphic: true
 
     default_scope { order(updated_at: :desc) }
 
-    scope :up, lambda{ where(:vote_flag => true) }
-    scope :down, lambda{ where(:vote_flag => false) }
-    scope :for_type, lambda{ |klass| where(:votable_type => klass) }
-    scope :by_type,  lambda{ |klass| where(:voter_type => klass) }
+    scope :up, -> { where(vote_flag: true) }
+    scope :down, -> { where(vote_flag: false) }
+    scope :for_type, ->(klass) { where(votable_type: klass.to_s) }
+    scope :by_type, ->(klass) { where(voter_type: klass.to_s) }
 
     validates_presence_of :votable_id
     validates_presence_of :voter_id
-
   end
-
 end
-

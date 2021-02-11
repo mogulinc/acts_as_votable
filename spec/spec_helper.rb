@@ -1,16 +1,22 @@
-$LOAD_PATH << File.join(File.dirname(__FILE__), '..', 'lib')
-require 'sqlite3'
-require 'acts_as_votable'
+# frozen_string_literal: true
 
-Dir["./spec/shared_example/**/*.rb"].sort.each {|f| require f}
-Dir["./spec/support/**/*.rb"].sort.each {|f| require f}
+$LOAD_PATH << File.join(File.dirname(__FILE__), "..", "lib")
+require "sqlite3"
+require "simplecov"
+require "acts_as_votable"
+require "factory_bot"
 
-ActiveRecord::Base.establish_connection(:adapter => "sqlite3", :database => ":memory:")
+Dir["./spec/shared_example/**/*.rb"].sort.each { |f| require f }
+Dir["./spec/support/**/*.rb"].sort.each { |f| require f }
 
-ActiveRecord::Schema.define(:version => 1) do
+SimpleCov.start
+
+ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
+
+ActiveRecord::Schema.define(version: 1) do
   create_table :votes do |t|
-    t.references :votable, :polymorphic => true
-    t.references :voter, :polymorphic => true
+    t.references :votable, polymorphic: true
+    t.references :voter, polymorphic: true
 
     t.boolean :vote_flag
     t.string :vote_scope
@@ -71,6 +77,8 @@ ActiveRecord::Schema.define(:version => 1) do
     t.integer :cached_scoped_weighted_total
     t.integer :cached_scoped_weighted_score
     t.float :cached_scoped_weighted_average
+
+    t.timestamps
   end
 
 end
@@ -81,7 +89,6 @@ class Voter < ActiveRecord::Base
 end
 
 class NotVoter < ActiveRecord::Base
-  
 end
 
 class Votable < ActiveRecord::Base
@@ -105,7 +112,7 @@ class StiNotVotable < ActiveRecord::Base
   validates_presence_of :name
 end
 
-class VotableChildOfStiNotVotable < StiNotVotable
+class ChildOfStiNotVotable < StiNotVotable
   acts_as_votable
 end
 
@@ -117,16 +124,16 @@ class VotableCache < ActiveRecord::Base
   validates_presence_of :name
 end
 
-class ABoringClass
-  def self.hw
-    'hello world'
-  end
+class VotableCacheUpdate < VotableCache
+  acts_as_votable cacheable_strategy: :update
 end
 
+class VotableCacheUpdateColumns < VotableCache
+  acts_as_votable cacheable_strategy: :update_columns
+end
 
-def clean_database
-  models = [ActsAsVotable::Vote, Voter, NotVoter, Votable, NotVotable, VotableCache]
-  models.each do |model|
-    ActiveRecord::Base.connection.execute "DELETE FROM #{model.table_name}"
+class ABoringClass
+  def self.hw
+    "hello world"
   end
 end
